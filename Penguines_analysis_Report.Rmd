@@ -1,0 +1,284 @@
+---
+title: "Penguins Exploratory Analysis"
+author: "Joseph G."
+date: "2024-09-23"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Palmer Penguins Analysis
+
+![Artwork by @allison_horst](../image_resouces/palmerpenguins.png){width="70%"}
+
+## Purpose
+This is an exploratory analysis which is meant to explore, analyze and gather insights from the sample data [Palmer Penguins](https://allisonhorst.github.io/palmerpenguins/).
+
+## Data Gathering and Manipulations
+
+### Load libraries and import the Palmer penguins data
+Notes: Setting up the environment by loading multiple packages including 'tidyverse' and the 'palmerpenguins' packages.
+```{r libraries, echo=TRUE, message=FALSE}
+# install.packages("palmerpenguins")
+# install.packages("tidyverse")
+# install.packages("skimr")
+# install.packages("janitor")
+#install.packages("hrbrthemes")
+# install.packages("geomtextpath")
+library(palmerpenguins)
+library(tidyverse)
+library(geomtextpath)
+library(skimr)
+library(janitor)
+library(hrbrthemes)
+
+data("penguins")
+```
+
+Here is a snippet of the Palmer penguins data:  
+
+```{r data_snippet}
+head(penguins)
+```
+
+### Understanding the data
+Let's explore the composition of the data:  
+
+```{r data_types, include=FALSE}
+glimpse(penguins)
+```
+Let's see the count of each specie  
+```{r specie_count, echo=FALSE}
+penguins %>% count(species) %>% mutate(count = n, n = NULL)
+```
+
+How about we see some stats for each specie?  
+```{r, warning=FALSE}
+penguins %>% group_by(species) %>% summarize(across(where(is.numeric), mean, na.rm = TRUE))
+```
+
+Any missing values for the variables?
+
+```{r data_skim, echo=FALSE}
+skim_without_charts(penguins)
+```
+From the brief skimming of the Palmer data, there are about 8 missing values. Some of the missing numeric entries may be replaced by the average value for a given specie such as the "bill length".  
+
+Other missing variables such as the categorical binary sex variable (e.g: M or F) may be assigned arbitrary since there is no way to validate the gender of the individual penguins.
+
+Here are the rows with missing values:
+```{r missing_values, echo=FALSE}
+penguins[!(complete.cases(penguins)),] %>% 
+  select(-island)
+```
+
+### Data cleaning
+The data types do not need to be adjusted and, for the sake of simplicity, the rows containing the missing values will be omitted for the rest of this analysis.
+
+This leaves us with the following data composition:
+
+```{r cleaned data, echo=FALSE}
+data_cleaned <- penguins[complete.cases(penguins),]
+data_cleaned %>% count(species) %>% mutate(count = n, n = NULL)
+```
+The average value for the body mass in grams may present some difficulty during the analysis due to the high values. It would be preferable to change that column into measurements in kilograms.
+
+```{r renaming vars, echo=FALSE}
+data_cleaned <- data_cleaned %>% 
+  mutate(body_mass_g = body_mass_g  / 1000 ) %>% 
+  rename(body_mass_kg = body_mass_g)
+head(data_cleaned)
+```
+Now the data is ready to be explored using some plots.  
+
+## Analyze The Data Through some Calculations and Plots
+
+This analysis will cover the following questions/queries:  
+
+1. What is the time span of this data?
+2. What is the average body mass for each specie?
+3. What is the average body mass for each specie by the island and by the years?
+4. How many penguins are found on each island?
+5. How many penguins of each sex are found on each island?
+6. What is the relationship between:
+   a. The sex and the body mass for each specie
+   b. The bill length and the bill depth for each specie
+   c. The flipper length and the body mass for each specie
+   
+  
+#### What is the time span of the data?
+```{r time span of data, echo=FALSE}
+summarise(data_cleaned, max_year = max(data_cleaned$year), min_year = min(data_cleaned$year))
+```
+
+
+```{r all_years), echo=FALSE}
+reframe(data_cleaned, all_years = unique(data_cleaned$year))
+```
+This data spans three years which provides us with a reasonable amount of data.  
+
+#### Average body mass for each specie:
+```{r avrg mass, echo=FALSE}
+data_cleaned %>% 
+  group_by(species) %>% 
+  summarise(avrg_body_mass = mean(body_mass_kg))
+```
+The Gentoo specie has the largest average body mass while the Adelie specie might be the smaller specie by body mass. How about we dig deeper into the average body mass for each specie by year?
+
+#### Average body mass for each specie by year:
+```{r, echo=FALSE}
+data_cleaned %>% 
+  group_by(year, species) %>% 
+  summarise(avrg_body_mass = mean(body_mass_kg), .groups = "keep")
+```
+```{r Average Body Mass for Each Specie, echo=FALSE, fig.align='center'}
+data_cleaned %>% 
+  group_by(year, species) %>% 
+  mutate(avrg_body_mass = mean(body_mass_kg)) %>% 
+  ggplot(aes(x = year, y = avrg_body_mass, color = species)) +
+  scale_x_continuous("year", breaks = seq(2007,2009, by = 1)) + 
+  geom_line(stat = "identity", size = 1.5) + 
+  theme(legend.position = "top") + 
+  labs(title = "Average Body Mass for Each Specie (2007-2009)", y = "Body Mass (kg)")
+```
+
+#### Average body mass of each specie by island:
+```{r, echo=FALSE}
+data_cleaned %>% 
+  group_by(island, species) %>% 
+  summarise(avrg_body_mass = mean(body_mass_kg), .groups = "keep")
+```
+```{r, echo=FALSE, fig.align='center'}
+data_cleaned %>% 
+  group_by(island, species) %>% 
+  mutate(avrg_body_mass = mean(body_mass_kg)) %>% 
+  ggplot() +
+  geom_bar(aes(x = species, y = avrg_body_mass, fill = species), stat = "identity") + 
+  theme(legend.position = "top") + 
+  facet_wrap(~island) +
+  labs(title = "Average Body Mass for Each Specie by Island", y = "Body Mass (kg)", x = "Island")
+```
+
+
+Both the body mass averages for each specie by island and by the years suggest that the Gentoo penguin specie is the largest specie while the Adelie specie is the smallest by body weight.  
+
+#### Count of Each Specie by Island:  
+```{r Number of penguin species for each island, echo=FALSE, fig.align='center'}
+ggplot(data_cleaned) +
+  geom_bar(aes(x = species, fill = species)) +
+  facet_grid(island~year) +
+  labs(title = "Number of penguin species for each island", y = "Number of penguins", subtitle = " From 2007 to 2009")
+  
+```
+
+The Gentoo specie is found exclusively in the Biscoe island, while the Chinstrap specie is only found on the Dream island. Notably, the Adelie specie is has around 10 to 20 members on each island.  
+
+Now let's dig deeper into the physical traits of the each pengiun specie.
+
+#### Relationships 
+##### Sex and Average Body Mass for each specie?  
+```{r Sex vs Body Mass, fig.align='center'}
+ggplot(data = data_cleaned) +
+  geom_bar(aes(
+    x = sex,
+    y = mean(body_mass_kg),
+    fill = species
+  ), stat = "identity") +
+  facet_grid(island ~ year) +
+  theme(legend.position = "top") +
+  labs(title = "Penguine Sex vs Body Mass", y = "Body Mass (kg)")
+  
+```
+
+Males are generally slightly heavier than females. However, for the Adelie specie in the Torgersen island, the average body mass of the females in 2007 was slightly higher than that of their male counterparts.
+
+##### Bill Length and the Bill Depth for each specie?
+
+![Artwork by @allison_horst](../image_resouces/culmen_depth.png){width="50%"}
+
+```{r Bill Length vs Depth, echo=FALSE, fig.align='center'}
+ggplot(data = data_cleaned,
+       aes(
+         x = bill_length_mm,
+         y = bill_depth_mm,
+         colour = species,
+         shape = species
+       )) +
+  geom_point() +
+  geom_labelsmooth(
+    aes(label = species),
+    fill = "white",
+    method = "lm",
+    formula = y ~ x,
+    size = 4,
+    linewidth = 1,
+    boxlinewidth = 0.4
+  ) +
+  theme(legend.position = "none") +
+  labs(title = "Bill Length Vs. Bill Depth", x = " Bill Length (mm)", y = "Bill Depth (mm)") +
+  annotate(
+    "text",
+    x = 35,
+    y = 14,
+    angle = 40,
+    label = "Species have different \n bill measurements",
+    color = "purple"
+  )
+    
+```
+
+There is a definite positive relationship between the bill's length and it's depth for the three penguin species. However, each specie's bill and depth measurements has different from each other. 
+
+
+##### Flipper length and the body mass for each specie by sex?   
+```{r echo=FALSE, fig.align='center'} 
+ggplot(data = data_cleaned,
+       aes(x = body_mass_kg, y = flipper_length_mm, colour = species)) + geom_point(alpha = 0.5) + geom_smooth(color = "red", method = "loess") + labs(title = "Penguine Body Mass Vs. Flipper Length", x = " Body Mass (kg)", y = "Flipper Length (mm)") +
+  facet_wrap(~sex) + 
+  scale_colour_manual(
+    name = "Treatment & State",
+    labels = c("Adelie", "Chinstrap", "Gentoo"),
+    values = c("red", "green", "blue")
+  )
+```
+
+There is a definitely a positive relationship between the body mass and the flipper length for every specie.  
+
+## Conclusions
+
+We come to the end of this analysis.
+Here is a summary of the insights we gathered from the Palmer penguins dataset:  
+
+1. Gentoo Specie:
+   * Largest average body mass
+   * Found exclusively in the Biscoe island
+2. Adelie Specie:
+   * The smaller specie by body mass
+   * Around 10 to 20 members on each island
+3. Chinstrap specie:
+   * Found exclusively in the Dream island
+4. Overall (All species)
+   * Strong correlation between body mass and flipper length
+   * Positive relationship between the bill's length and it's depth
+   * Males are generally slightly heavier than females
+   
+    
+
+## Limitations
+One of the limitation of this analysis would be the missing values of sexes for about the 11 rows that were omitted for the analysis.
+
+```{r, echo=FALSE, fig.align='center', out.height="50%", out.width="50%"}
+knitr::include_graphics("../image_resouces/palmerpenguinslogo.png")
+```
+Artwork by @allison_horst
+
+## References  
+Horst AM, Hill AP, Gorman KB (2020). palmerpenguins: Palmer Archipelago
+  (Antarctica) penguin data. R package version 0.1.0.
+  https://allisonhorst.github.io/palmerpenguins/. doi: 10.5281/zenodo.3960218.
+
+
